@@ -1,0 +1,150 @@
+Camera:
+- Friday to nxt thursday 6pm
+- Friday 9am to 12pm
+- form includes which friday
+- list of cameras that will be available
+- includes in stock and to be returned ones
+- queue , return position in queue
+- 1st max priority
+- final confirmaton at 8am friday( stored proc at 8)
+- if not available, then patron shud be communicated about this
+- patron inititates checkout
+- if not checked out till 10 am, notify cancelled reservation
+- msg to next person in queue that cam is available for pickup at 10am
+- this person has time till 11am
+- else next person gets a msg, who has time till 12pm
+- if 3rd person does not checkout the cam till 12pm, then no checkout for the cam that particular Friday
+- so only 3 ppl in the queue including 1st person who has max priority
+- table shud have a flag for checked out or not
+- if camera not returned by deadline, notify of late penalty
+- late fee 1$/hour
+- if 1st person returns back the cam before 12pm, it doesnt matter since the camera has been checkedout for the weekend, hence no one else can check it out again
+
+/* Camera table which contains details of cameras belonging to the library. */
+/* Library name can be displayed from the resources table. */
+
+CREATE TABLE "CAMERA"
+  (
+	"R_ID"	NUMBER(10),
+	"CAM_ID"	NUMBER(10),
+	"MAKE"	VARCHAR2(20),
+	"MODEL"	VARCHAR2(20),
+	"LENS_CONFIG"	VARCHAR2(20),
+	"MEMORY"      VARCHAR2(20),
+	PRIMARY KEY (R_ID),
+	FOREIGN KEY ("R_ID" ) REFERENCES "RESOURCE" ("R_ID" ) ON DELETE CASCADE
+  );
+
+/* An entry for a request will be added in this table.*/
+/* Once an entry is initiated a trigger is called - cam_queue_insert */
+/* This makes sure that only 3 entries for a particular reosurce for that weekend is made*/
+/* 2 procedures used for this purpose are cam_queue_insert,cam_queue_count*/
+
+CREATE TABLE "CAM_QUEUE"
+  (
+	"Q_ID" NUMBER(10),
+	"R_ID" NUMBER(10),	
+	"P_ID" VARCHAR2(10),
+	"CHECKOUT_DATE" DATE NOT NULL,
+	"CONSIDERED"	CHAR DEFAULT '0',
+	PRIMARY KEY ("R_ID","P_ID","CHECKOUT_DATE"),
+	FOREIGN KEY ("R_ID" ) REFERENCES "RESOURCE" ("R_ID" ) ON DELETE CASCADE,
+	FOREIGN KEY ("P_ID" ) REFERENCES "PATRON" ("P_ID" ) ON DELETE CASCADE,
+	CONSTRAINT CONSIDERED CHECK ("CONSIDERED" IN ('0','1'))
+  );
+
+/* Q_ID needs a sequence */
+
+create sequence seq_cam_queue
+increment by 1
+start with 1;
+
+/* While populating into above table, sequence vlaue will be called by using - seq_cam_queue.nextval */
+
+/*A procedure will run which will insert the first person in queue for a particular cam R_ID into the checkout table*/
+
+CREATE TABLE "CAMERA_CHECKOUT"
+(	"C_ID"	NUMBER(10),
+	"P_ID"	VARCHAR2(10),
+	"R_ID"	NUMBER(10),
+	"CHECKOUT_DATE" DATE NOT NULL,
+	"DUE_DATE"	DATE,
+	"CHECKED_OUT"	CHAR DEFAULT '0',
+	"RETURN_DATE"	DATE,
+	PRIMARY KEY ("C_ID"),
+	FOREIGN KEY ("P_ID" ) REFERENCES "PATRON" ("P_ID" ) ON DELETE CASCADE,	
+	FOREIGN KEY ("R_ID" ) REFERENCES "RESOURCE" ("R_ID" ) ON DELETE CASCADE,
+	CONSTRAINT CAM_CHKOUT_START_END CHECK ( CHECKOUT_DATE <= DUE_DATE ),
+	CONSTRAINT CHECKED_OUT CHECK ("CHECKED_OUT" IN ('0','1'))
+);
+
+/*C_ID is autopopulated using a sequence*/
+/* Due_date will be calculated using proc - */
+/* Checked_out filled will be 1 when patron clicks on checkout button*/
+/* Return date will be updated when user returns book - */
+
+create sequence seq_cam_chk
+increment by 1
+start with 1;
+
+CREATE TABLE "REMINDER"
+  (
+     "REMIND_ID"            NUMBER(10),
+     "R_ID" NUMBER(10),
+     "P_ID" VARCHAR2(10),
+    "REMINDER_DESCRIPTION" VARCHAR2(100),
+     "REMINDER_DATE"        DATE,
+     PRIMARY KEY ("REMIND_ID"),     
+     FOREIGN KEY ("R_ID" ) REFERENCES "LIBRARY_RESOURCE" ("R_ID" ) ON DELETE CASCADE,
+     FOREIGN KEY ("P_ID" ) REFERENCES "PATRON" ("P_ID" ) ON DELETE CASCADE
+   );
+
+TO_DATE('2003/05/03', 'yyyy/mm/dd')
+select to_char(sysdate,'DAY') from dual;
+
+
+Notes:
+- list of cameras that will be available : for this the query will be where due date is the coming thursday (since - includes in stock and to be returned ones)
+- queue , return position in queue :  For Q_ID population we will need a stored proc/trigger. See what to use. Only 3 people will be part of the queue
+- 1st max priority, - final confirmaton at 8am friday( stored proc at 8) : proc1
+- if not available, then patron shud be communicated about this: part of above proc
+- patron inititates checkout (and all that) : proc2
+- decide this: I hope we are deleting the queue on friday 12 pm .( there is possibility once we delete this info on what queue no was student xyz for pqr camera)
+DONT DELETE QUEUE 
+
+
+1. ID ­ CA1  
+Make ­ Olympus  
+Model ­ E­620  
+Configuration of Lens  ­ 14­42mm lens 1:3.5­5.6   
+Memory Available ­ 16G  
+Library ­ J. B. Hunt    
+
+2. ID ­ CA2  
+Make ­ Cannon  
+Model ­ EOS Rebel T4i  
+Configuration of Lens  ­ 18­135mm EF­S IS STM Lens  Memory Available ­ 32G  
+Library ­ J. B. Hunt   
+
+3. ID ­ CA3  
+Make ­ Cannon  
+Model ­ EOS Rebel T4i  
+Configuration of Lens  ­ 18­135mm EF­S IS STM Lens  Memory Available ­ 32G  
+Library ­ J. B. Hunt 
+
+
+Camera Reservation ­     
+1. Student ­ Gale Boetticher  
+Camera ­ Cannon EOS Rebel T4i  
+Check out Date ­ Oct 30th, 2015 (Friday)  
+Due Date ­ Nov 5th (Thursday)  ***This camera has not yet been returned***    
+
+2. Student ­ Jesse Pinkman  
+Camera ­ Olympus E­620  
+Check out Date ­ Nov 6th, 2015 (Friday)  
+Due Date ­ Nov 12th (Thursday)  ***This camera has not yet been returned***    
+
+3. Student ­ Walt Jr.  
+Camera ­ Cannon EOS Rebel T4i  
+Check out Date ­ Oct 16th, 2015 (Friday)  
+Due Date ­ Oct 22nd (Thursday)  ***This camera has not yet been returned***  

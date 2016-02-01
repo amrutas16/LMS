@@ -1,0 +1,31 @@
+/*GENERATE DROP - According to constraints */
+select 'drop table '||table_name||' cascade constraints;' from user_tables;
+
+drop table STUDENT_ENROLLMENT_INFO cascade constraints;
+drop table DEPARTMENT cascade constraints;
+drop table PATRON cascade constraints;
+drop table STUDENT cascade constraints;
+drop table COURSE cascade constraints;
+drop table FACULTY cascade constraints;
+drop table TEACHES cascade constraints;
+drop table ENROLLS cascade constraints;
+drop table LIBRARY cascade constraints;
+drop table LIBRARY_RESOURCE cascade constraints;
+drop table PUBLICATION cascade constraints;
+drop table AUTHOR cascade constraints;
+drop table JOURNAL cascade constraints;
+drop table CONF_PROCEEDINGS cascade constraints;
+drop table BOOK cascade constraints;
+drop table COURSE_RESERVATION cascade constraints;
+drop table CHECKOUT cascade constraints;
+drop table QUEUE cascade constraints;
+drop table REG_HOLD cascade constraints;
+drop table BILL cascade constraints;
+drop table REMINDER cascade constraints;
+drop table CAMERA cascade constraints;
+drop table CAM_QUEUE cascade constraints;
+drop table CAMERA_CHECKOUT cascade constraints;
+drop table ROOM_CONSTRAINT cascade constraints;
+drop table ROOM cascade constraints;
+drop table ROOM_CHECKOUT cascade constraints;
+drop table LOGIN cascade constraints;

@@ -1,0 +1,43 @@
+/*temp table where procedure inserts a value*/
+create table time_temp
+(
+t integer
+);
+
+/* procedure to insert a value in the temp table*/
+create or replace procedure temp as
+begin
+	 insert into time_temp values( extract(minute from systimestamp) );
+end;
+/
+
+/* proc which calls above procedure every fixed interval*/
+var t number;
+BEGIN
+DBMS_JOB.SUBMIT
+(
+job =>:t,
+WHAT=>'temp;',--Procedure
+next_date=>sysdate+1/(24*60),
+interval=>'sysdate+1/(24*60)'
+);
+commit;
+END;
+/
+
+/* table in which trigger will insert when invoked*/
+create table trig_table
+(
+name varchar2
+);
+
+
+/* Trigger*/
+create or replace trigger temp_trig
+after insert
+on 
+time_temp
+begin
+insert into trig_table values('ABC');
+end;
+/

@@ -1,0 +1,20 @@
+Change Log 
+
+University Library 1.0.1 10-18-2015(adhuri)
+
+-Forked out a branch for insert,update,delete,select
+-added folder sql for create statement.
+
+
+University Library 1.0.0 10-14-2015(mkadaba)
+
+-Added Schema Faculty
+
+University Library 1.0.0 10-14-2015
+-----------------------
+- Created Student Schema
+- Created Student First Home Page
+
+University Library 1.0.0 10-14-2015
+-----------------------
+Created Change Log 

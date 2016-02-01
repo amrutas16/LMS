@@ -1,0 +1,6 @@
+For every new change :
+  Update the changeLog.txt file with user who is changing and version eg 1.01,1.02 and mention the feature changes/page changes
+  add the changes in a folder ( Create a folder with the version change eg 1.01 folder)
+  add the sql of the new page created ( suppose new page is student.sql from apex add to this folder)
+  if a new table is created - add its DDL structure ( keep a single DDL structure by forking and pulling the request ) 
+

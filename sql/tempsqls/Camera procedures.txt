@@ -1,0 +1,383 @@
+Flow:
+1. Insert details into form on GUI: Select cam,date 
+
+2. Using these details an entry will be made in queue table: R_ID,Q_ID(auto populated),P_ID,date
+R_ID needs a sequence genr. Refer below:
+https://github.ncsu.edu/ashintr/LMS/issues/35
+
+During this entry, we need to check if queue is full or not for that R_ID, or else make an entry into the queue.
+As per discussion with dhuri:
+trigger before insert into queue table
+which will call a stored proc to check this
+also do a select to return no of values in queue + 1 as the position in queue
+
+/*trigger to call the proc*/
+create or replace trigger cam_queue_insert
+before insert on cam_queue
+for each row
+declare
+Q_NO number;
+begin
+	cam_queue_insert(:new.R_ID);
+end;
+/
+
+
+
+/*proc1*/
+create or replace procedure cam_queue_insert(Res_ID IN NUMBER)
+As
+COUNT_QUEUE number(10);
+QUEUE_FULL EXCEPTION;
+Begin
+-- count no of instances in queue for that R_ID
+cam_queue_count(Res_ID,COUNT_QUEUE);
+
+IF COUNT_QUEUE >=3 THEN
+-- NOW RETURN ERROR BY RAISING EXCEPTION
+	RAISE QUEUE_FULL;
+ELSE
+	COUNT_QUEUE := COUNT_QUEUE +1;
+	DBMS_OUTPUT.PUT_LINE('You are at queue number ' || COUNT_QUEUE);
+END IF;
+
+EXCEPTION
+	WHEN QUEUE_FULL THEN
+		Raise_Application_Error (-20002, 'Queue is full.');
+end;
+/
+
+/*proc2*/
+create or replace procedure cam_queue_count(Res_ID IN NUMBER,COUNT_QUEUE OUT NUMBER)
+As
+BEGIN
+Select count(*) 
+INTO COUNT_QUEUE
+from CAM_QUEUE
+WHERE R_ID = Res_ID;
+END;
+/
+
+create sequence seq_cam_queue
+start with 1
+increment by 1;
+
+
+3. Procedure which will run at 8am.
+steps:
+a. FIND camera's that are available - find total camera's given, total returned for a particular R_ID . IF there is a difference then cam has not been returned.
+#NOT THE BEST WAY
+
+/* procedure to find if a camera is available or not*/
+create or replace procedure cam_available(Res_ID IN NUMBER,ret OUT number)
+As
+total number;
+checked_in number;
+cnt number(10);
+BEGIN
+select count(*)  
+into total
+from camera_checkout 
+where r_ID = Res_ID
+and CHECKED_OUT='1'
+group by r_ID;
+
+into checked_in
+
+select count(*) from camera_checkout where
+r_id IN (select r_id from camera_checkout where return_date is not null and r_id=2)
+and CHECKED_OUT='1'
+group by r_ID;
+
+
+if total = checked_in then
+	ret:= 1;
+else
+	ret:= 0;
+end if;
+
+EXCEPTION
+   WHEN NO_DATA_FOUND THEN
+	ret:=1;
+END;
+/
+
+/* dummy to test above proc*/
+create or replace procedure cam_8am
+as
+cnt number(10);
+begin
+cam_available(1,cnt);
+DBMS_OUTPUT.PUT_LINE(cnt);
+cam_available(2,cnt);
+DBMS_OUTPUT.PUT_LINE(cnt);
+end;
+/
+
+b. if R_ID is available
+
+/* first test this again and then change to the values of actual proc*/
+var t number;
+BEGIN
+DBMS_JOB.SUBMIT
+(
+job =>:t,
+WHAT=>'temp3;',--Procedure name will be given here
+next_date=>next_day(trunc(sysdate-1),'Friday')+8/24,
+interval=>'sysdate+7'
+);
+commit;
+END;
+/
+
+/* procedure which will run  at 8am */
+create or replace procedure cam_8am
+as
+-- variables
+res_num number(10);
+avail number(10);
+qid number(10);
+pid varchar2(10);
+chdate date;
+duedate date;
+camid number(10);
+mk varchar2(20);
+mdl varchar2(20);
+CURSOR res_cur
+IS
+	-- here select only those r_id for that particular date(sysdate)
+	select distinct r_id from cam_queue ;
+begin
+OPEN res_cur;
+Loop
+	Fetch res_cur into res_num;
+	EXIT WHEN res_cur%NOTFOUND;
+	-- check if cam is available
+	cam_available(res_num,avail);	
+	-- if cam available then
+	if avail = 1 then
+		-- get first inserted q_id
+		select min(q_id) 
+		into qid
+		from cam_queue 
+		where r_id = res_num
+		and considered =0;
+		-- exception needed if there are no more requests for that resource
+		-- change considered to 1
+		update cam_queue
+		set considered = '1'
+		where q_id = qid;
+		-- get p_id and checkoutdate for those values
+		
+		select checkout_date
+		into chdate
+		from cam_queue
+		where q_id = qid
+		and r_id = res_num;
+		select p_id
+		into pid
+		from cam_queue
+		where q_id = qid
+		and r_id = res_num;
+		-- calculate due date
+		select chdate+6
+		into duedate
+		from dual;
+		-- inserting values into checkout table
+		insert into camera_checkout values(seq_cam_chk.nextval,pid,res_num,chdate,duedate,0,null);
+
+		-- notification saying cam is available and can be checked out by him
+		select cam_id,make,model 
+		into camid,mk,mdl
+		from camera
+		where r_id = res_num;
+		insert into reminder values(reminder_sequence,res_num,pid,'PLEASE COLLECT YOUR RESERVED CAMERA:' || camid || mk || mdl || ' before 10am. Or else your reservation will be cancelled.',chdate);
+	else
+		-- pop msg saying resource unavailable
+		DBMS_OUTPUT.PUT_LINE('Sorry!');
+		-- Raise application error or shud this be also be in reminder
+	end if;
+end loop;
+close res_cur;
+end;
+/
+
+/*how to handle no data found exception here??????*/
+use try catch for all possibilities
+
+8 - reminder,add in checkout,considered
+10 - same 
+11 - 
+
+
+
+
+/* first test this again and then change to the values of actual proc*/
+var t number;
+BEGIN
+DBMS_JOB.SUBMIT
+(
+job =>:t,
+WHAT=>'temp3;',--Procedure name will be given here
+next_date=>next_day(trunc(sysdate-1),'Friday')+10/24,
+interval=>'sysdate+7'
+);
+commit;
+END;
+/
+
+/* procedure which will run  at 10am */
+create or replace procedure cam_10am
+as
+-- variables
+
+res_num number(10);
+qid number(10);
+pid varchar2(10);
+chdate date;
+duedate date;
+camid number(10);
+mk varchar2(20);
+mdl varchar2(20);
+
+CURSOR cur_camera
+IS
+	select distinct r_id from camera_checkout where checked_out = '0' and checkout_date=sysdate;
+
+begin
+-- check which resources have been checked out
+
+
+
+-- for the ones not checked out add them in reminder,camera_checkout
+
+OPEN cur_camera;
+Loop
+	Fetch cur_camera into res_num;
+	EXIT WHEN cur_camera%NOTFOUND;
+
+		select min(q_id) 
+		into qid
+		from cam_queue 
+		where r_id = res_num
+		and considered =0;
+		-- exception needed if there are no more requests for that resource
+		-- change considered to 1
+		update cam_queue
+		set considered = '1'
+		where q_id = qid;
+		-- get p_id and checkoutdate for those values
+		
+		select checkout_date
+		into chdate
+		from cam_queue
+		where q_id = qid
+		and r_id = res_num;
+		select p_id
+		into pid
+		from cam_queue
+		where q_id = qid
+		and r_id = res_num;
+		-- calculat//e due date
+		select chdate+6
+		into duedate
+		from dual;
+		-- inserting values into checkout table
+		insert into camera_checkout values(seq_cam_chk.nextval,pid,res_num,chdate,duedate,0,null);
+
+		-- notification saying cam is available and can be checked out by him
+		select cam_id,make,model 
+		into camid,mk,mdl
+		from camera
+		where r_id = res_num;
+		insert into reminder values(reminder_sequence,res_num,pid,'PLEASE COLLECT YOUR RESERVED CAMERA:' || camid || mk || mdl || ' before 11am. Or else your reservation will be cancelled.',chdate);
+end loop;
+CLOSE cur_camera;
+	
+end;
+/
+
+
+/* first test this again and then change to the values of actual proc*/
+var t number;
+BEGIN
+DBMS_JOB.SUBMIT
+(
+job =>:t,
+WHAT=>'temp3;',--Procedure name will be given here
+next_date=>next_day(trunc(sysdate-1),'Friday')+11/24,
+interval=>'sysdate+7'
+);
+commit;
+END;
+/
+
+create or replace procedure cam_11am
+as
+-- variables
+
+res_num number(10);
+qid number(10);
+pid varchar2(10);
+chdate date;
+duedate date;
+camid number(10);
+mk varchar2(20);
+mdl varchar2(20);
+
+CURSOR cur_camera
+IS
+	select distinct r_id from camera_checkout where checked_out = '0' and checkout_date=sysdate;
+
+begin
+-- check which resources have been checked out
+
+
+
+-- for the ones not checked out add them in reminder,camera_checkout
+
+OPEN cur_camera;
+Loop
+	Fetch cur_camera into res_num;
+	EXIT WHEN cur_camera%NOTFOUND;
+
+		select min(q_id) 
+		into qid
+		from cam_queue 
+		where r_id = res_num
+		and considered =0;
+		-- exception needed if there are no more requests for that resource
+		-- change considered to 1
+		update cam_queue
+		set considered = '1'
+		where q_id = qid;
+		-- get p_id and checkoutdate for those values
+		
+		select checkout_date
+		into chdate
+		from cam_queue
+		where q_id = qid
+		and r_id = res_num;
+		select p_id
+		into pid
+		from cam_queue
+		where q_id = qid
+		and r_id = res_num;
+		-- calculat//e due date
+		select chdate+6
+		into duedate
+		from dual;
+		-- inserting values into checkout table
+		insert into camera_checkout values(seq_cam_chk.nextval,pid,res_num,chdate,duedate,0,null);
+
+		-- notification saying cam is available and can be checked out by him
+		select cam_id,make,model 
+		into camid,mk,mdl
+		from camera
+		where r_id = res_num;
+		insert into reminder values(reminder_sequence,res_num,pid,'PLEASE COLLECT YOUR RESERVED CAMERA:' || camid || mk || mdl || ' before 12am. Or else your reservation will be cancelled.',chdate);
+end loop;
+CLOSE cur_camera;
+	
+end;
+/
